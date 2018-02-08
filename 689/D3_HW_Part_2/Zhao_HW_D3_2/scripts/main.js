@@ -5,7 +5,6 @@
 	var height = 300;
 
 	var dataXRange = { min: 40, max: 100 };
-	// var xStartPos = 40;
 	var xInterval = 60;
 	var dataYRange = { min: 0, max: 100 };
 	var xAxisLabelHeader = "X Header";
@@ -20,19 +19,17 @@
 
 	var timer;
 
+	var paused = false;
+
 	function timerCallback(elapsed) {
-		if (elapsed > 100) {
+		if (!paused) {
 			updateChart();
-			timer.restart(timerCallback);
 		}
 	}
 
 	function updateChart() {
 		dataXRange.min += 0.1;
 		dataXRange.max += 0.1;
-		// console.log("updating")
-
-		// displayedData = data.slice(dataXRange.min, dataXRange.max);
 		displayedData = data.filter(d => d.xVal > dataXRange.min && d.xVal < dataXRange.max);
 		
 		updateAxes();
@@ -42,7 +39,6 @@
 	init();
 
 	function init() {
-
 		chartWidth = width - margin.left - margin.right;
 		chartHeight = height - margin.top - margin.bottom;
 
@@ -52,22 +48,13 @@
 				return console.warn(error);
 			} else {
 				data = json;
-				console.log("JSON loaded");
+
 				initializeChart();
 				createAxes();
-				// createAxes(xStartPos, xStartPos + xInterval);
 
-				// displayedData = data.slice(dataXRange.min, dataXRange.max);
-
-				// drawDots();
-
-				timer = d3.timer(timerCallback);
-
-				// you could load more data here using d3.json() again...
-
+				d3.interval(timerCallback, 100);
 			}
 		});
-
 	}//end init
 
 	function initializeChart() {
@@ -135,15 +122,66 @@
 
 		dots.enter().append("circle")
 				.attr("class", "dot")
-				.merge(dots)
+			.merge(dots)
 				.attr("cx", function(d) { return chart.xScale(d.xVal); })
 				.attr("cy", function(d) { return chart.yScale(d.yVal); })
 				.attr("r", circleRadius)
 				.on("click", function(d) {
 					console.log("circle: ", d.xVal, ", ", d.yVal);
+				})
+				.on('mouseover', function(d) {
+					ripple(d);
 				});
 
 		dots.exit().remove();
 	}
 
+	function euclideanDistance(x1, y1, x2, y2) {
+		var xDiff = x2 - x1;
+		var yDiff = y2 - y1;
+
+		return Math.sqrt(xDiff * xDiff + yDiff * yDiff);
+	}
+
+	function ripple(hoveredItem) {
+		var radius = 5;
+		var x = parseFloat(hoveredItem.xVal);
+		var y = parseFloat(hoveredItem.yVal);
+
+		var interval = d3.interval(() => {
+			var allDots = chart.plotArea.selectAll(".dot");
+			var dotsWithinDist = allDots.filter(d => {
+				var dx = parseFloat(d.xVal);
+				var dy = parseFloat(d.yVal);
+
+				var distance = euclideanDistance(x, y, dx, dy);
+				
+				return distance < radius && distance > radius - 10;
+			});
+
+			allDots
+				.style('fill', 'black');
+			dotsWithinDist
+				.style('fill', 'red');
+
+			console.log(dotsWithinDist);
+
+			radius += 2;
+
+			if (radius > 50) {
+				interval.stop();
+			}
+		}, 100);
+	}
+
+	var pausePlayButton = d3.select('#otherDiv').append('button').text('Pause');
+	pausePlayButton.on('click', function() {
+		if (paused) {
+			d3.select(this).text('Pause');
+		} else {
+			d3.select(this).text('Play');
+		}
+
+		paused = !paused;
+	})
 })();
