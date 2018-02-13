@@ -4,7 +4,7 @@
 	var width = 400;
 	var height = 300;
 
-	var dataXRange = { min: 40, max: 100 };
+	var dataXRange = { min: 0, max: 40 };
 	var xInterval = 60;
 	var dataYRange = { min: 0, max: 100 };
 	var xAxisLabelHeader = "X Header";
@@ -19,7 +19,13 @@
 
 	var timer;
 
+	var animationInterval = Math.floor(1000 / 60);
+
+	var rippleTimer;
+
 	var paused = false;
+	var scrollSpeed = 0.05;
+	var scrollSpeedStep = 0.05;
 
 	function timerCallback(elapsed) {
 		if (!paused) {
@@ -28,8 +34,8 @@
 	}
 
 	function updateChart() {
-		dataXRange.min += 0.1;
-		dataXRange.max += 0.1;
+		dataXRange.min += scrollSpeed;
+		dataXRange.max += scrollSpeed;
 		displayedData = data.filter(d => d.xVal > dataXRange.min && d.xVal < dataXRange.max);
 		
 		updateAxes();
@@ -52,7 +58,7 @@
 				initializeChart();
 				createAxes();
 
-				d3.interval(timerCallback, 100);
+				d3.interval(timerCallback, animationInterval);
 			}
 		});
 	}//end init
@@ -68,7 +74,7 @@
 
 	function updateAxes() {
 		chart.xScale.domain([dataXRange.min, dataXRange.max]);
-		chart.select('.scatter-xaxis').call(chart.xAxis)
+		chart.select('.scatter-xaxis').call(chart.xAxis);
 	}
 
 	function createAxes(min, max) {
@@ -133,7 +139,8 @@
 					ripple(d);
 				});
 
-		dots.exit().remove();
+		dots.exit()
+			.remove();
 	}
 
 	function euclideanDistance(x1, y1, x2, y2) {
@@ -145,33 +152,46 @@
 
 	function ripple(hoveredItem) {
 		var radius = 5;
-		var x = parseFloat(hoveredItem.xVal);
-		var y = parseFloat(hoveredItem.yVal);
+		var maxRadius = 250;
+		var rippleWindow = 60;
 
-		var interval = d3.interval(() => {
+		if (rippleTimer) {
+			rippleTimer.stop();
+		}
+
+		rippleTimer = d3.interval(() => {
+			var x = chart.xScale(parseFloat(hoveredItem.xVal));
+			var y = chart.yScale(parseFloat(hoveredItem.yVal));
+
 			var allDots = chart.plotArea.selectAll(".dot");
 			var dotsWithinDist = allDots.filter(d => {
-				var dx = parseFloat(d.xVal);
-				var dy = parseFloat(d.yVal);
+				var dx = chart.xScale(parseFloat(d.xVal));
+				var dy = chart.yScale(parseFloat(d.yVal));
 
 				var distance = euclideanDistance(x, y, dx, dy);
 				
-				return distance < radius && distance > radius - 10;
+				return distance < radius && distance > radius - rippleWindow;
 			});
 
-			allDots
-				.style('fill', 'black');
+			allDots.style('fill', 'black');
+
+			var red = Math.floor(255 * (1 - radius / maxRadius));
+			var green = Math.floor(127 + 127 * radius / maxRadius);
+			var blue = Math.floor(255 * radius / maxRadius);
+
+			var rippleColor = `rgb(${red}, ${green}, ${blue})`;
 			dotsWithinDist
-				.style('fill', 'red');
+				.transition()
+				.duration(200)
+				.style('fill', rippleColor);
 
-			console.log(dotsWithinDist);
+			radius += 5;
 
-			radius += 2;
-
-			if (radius > 50) {
-				interval.stop();
+			if (radius > maxRadius) {
+				allDots.transition().style('fill', 'black');
+				rippleTimer.stop();
 			}
-		}, 100);
+		}, animationInterval);
 	}
 
 	var pausePlayButton = d3.select('#otherDiv').append('button').text('Pause');
@@ -183,5 +203,17 @@
 		}
 
 		paused = !paused;
-	})
+	});
+
+	var speedUpButton = d3.select('#otherDiv').append('button').text('Speed Up');
+	speedUpButton.on('click', function() {
+		scrollSpeed += scrollSpeedStep;
+	});
+
+	var slowDownButton = d3.select('#otherDiv').append('button').text('Slow Down');
+	slowDownButton.on('click', function() {
+		if (scrollSpeed > scrollSpeedStep) {
+			scrollSpeed -= scrollSpeedStep;
+		}
+	});
 })();
